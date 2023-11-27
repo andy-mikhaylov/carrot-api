@@ -97,6 +97,9 @@ class Api
      */
     const NOT_MODIFIED_STATUS_CODE = 304;
 
+    //&:
+    const IS_SYSTEM=false;
+
     /**
      * Url prefix
      */
@@ -172,14 +175,18 @@ class Api
      */
     public function call($method, array $data = null, $type = 'get')
     {
-        $url = self::URL_PREFIX . '/' . $method . '?auth_token=' . $this->token;
+        //o: $url = self::URL_PREFIX . '/' . $method . '?auth_token=' . $this->token;
+        $url = self::URL_PREFIX . '/' . $method; //!&:
+
         if ($data && $type == 'get') {
-            $url .= '&' . http_build_query($data);
+            //o: $url .= '&' . implode('&', $data);
+            $url .= '&' . implode('&', $data);    //!&:
         }
 
         $options = [
             CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Token '.$this->token], //!&:
         ];
         if ($data && $type == 'post') {
             $options[CURLOPT_POST] = true;
@@ -203,7 +210,7 @@ class Api
     {
         curl_setopt_array($this->curl, $options);
         $result = curl_exec($this->curl);
-        self::curlValidate($this->curl, $result);
+        self::curlValidate($this->curl);
 
         return $result;
     }
@@ -215,14 +222,12 @@ class Api
      *
      * @throws HttpException
      */
-    public static function curlValidate($curl, $result)
+    public static function curlValidate($curl)
     {
         if (($httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE)) &&
             !in_array($httpCode, [self::DEFAULT_STATUS_CODE, self::NOT_MODIFIED_STATUS_CODE])
         ) {
-            $exception = (new HttpException(self::$codes[$httpCode], $httpCode))
-                ->setResponse($result);
-            throw $exception;
+            throw new HttpException(self::$codes[$httpCode], $httpCode);
         }
     }
 
@@ -243,18 +248,6 @@ class Api
             throw new InvalidJsonException(json_last_error_msg(), json_last_error());
         }
         return $json;
-    }
-
-    /**
-     * Check correct string
-     *
-     * @param string $string
-     *
-     * @return bool
-     */
-    private function isEmptyString($string)
-    {
-        return empty($string);
     }
 
     /**
@@ -287,8 +280,8 @@ class Api
      *
      * @return array
      *
+     * @throws InvalidArgumentException
      * @throws Exception
-     * @throws HttpException
      */
     public function getActiveUsers()
     {
@@ -308,7 +301,7 @@ class Api
      *
      * @return int
      *
-     * @throws HttpException
+     * @throws InvalidArgumentException
      * @throws Exception
      */
     public function getCountLeads()
@@ -334,7 +327,7 @@ class Api
      *
      * @return array
      *
-     * @throws HttpException
+     * @throws InvalidArgumentException
      * @throws Exception
      */
 
@@ -374,24 +367,26 @@ class Api
      *
      * @return array
      *
-     * @throws HttpException
+     * @throws InvalidArgumentException
      * @throws Exception
      */
+
     public function getConversations(
-        $userId = null,
+        $userId = false,
         $limit = 20,
         $offset = 0,
         $closed = null,
         $assigned = null,
         $tags = []
-    ) {
+    )
+    {
         $params = [
             'count' => $limit,
             'after' => $offset
         ];
 
         if ($userId) {
-            $data = $this->call('users/' . $userId . '/conversations', $params, 'get');
+            $data = $this->call('users/' . $this->appId . '/conversations', $params, 'get');
         } else {
             if ($closed !== null) {
                 $params['closed'] = (bool)$closed;
@@ -423,7 +418,6 @@ class Api
      *
      * @return Conversation
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
@@ -440,15 +434,13 @@ class Api
      * Get messages from conversation.
      *
      * @param int $id conversation id
-     * @param int $limit
+     * @param int $count
      * @param int $offset
      *
-     * @return array
+     * @return Message
      *
-     * @throws Exception
-     * @throws HttpException
      * @throws InvalidArgumentException
-     * @throws InvalidJsonException
+     * @throws Exception
      */
 
     public function getMessages($id, $limit = 20, $offset = 0)
@@ -479,7 +471,7 @@ class Api
      *
      * @param int $id
      * @param string $message
-     * @param string $type
+     * @param bool $type
      * @param string $botName
      * @param bool $fromUser - send message from user
      * @param int $fromAdmin - Id of Admin or default_admin, send message from admin
@@ -489,10 +481,8 @@ class Api
      *
      * @return bool
      *
-     * @throws Exception
-     * @throws HttpException
      * @throws InvalidArgumentException
-     * @throws InvalidJsonException
+     * @throws Exception
      */
 
     public function sendConversationMessage(
@@ -505,7 +495,8 @@ class Api
         $randomId = 0,
         $autoAssign = 0,
         $autoAssignRandomId = 0
-    ) {
+    )
+    {
         if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
@@ -594,7 +585,6 @@ class Api
      *
      * @return bool
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
@@ -643,7 +633,6 @@ class Api
      *
      * @return bool
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
@@ -694,10 +683,10 @@ class Api
      *
      * @return bool
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
+
     public function addTag($id, $tag, $fromAdminId = null, $botName = 'Bot', $randomId = 0)
     {
         if ($this->isEmptyId($id)) {
@@ -747,10 +736,10 @@ class Api
      *
      * @return bool
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
+
     public function deleteTag($id, $tag, $fromAdminId = null, $botName = 'Bot', $randomId = 0)
     {
         if ($this->isEmptyId($id)) {
@@ -799,10 +788,10 @@ class Api
      *
      * @return bool
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
+
     public function closeConversation($id, $fromAdminId = null, $botName = 'Bot', $randomId = 0)
     {
         if ($this->isEmptyId($id)) {
@@ -835,18 +824,17 @@ class Api
     /**
      * Get user by ID.
      *
-     * @param string $id - user ID
+     * @param int $id
      * @param bool $isSystem
      *
      * @return User
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
-    public function getUser($id, $isSystem = true)
+    public function getUser($id, $isSystem = self::IS_SYSTEM)
     {
-        if ($this->isEmptyString($id)) {
+        if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
 
@@ -867,17 +855,15 @@ class Api
     /**
      * Insert/Update user props.
      *
-     * @param string $id - user ID
+     * @param int $id - user ID
      * @param array $props
      * @param bool $isSystem - is system user
      *
      * @throws InvalidArgumentException
      * @throws Exception
-     * @throws HttpException
      */
-    public function setProps($id, $props, $isSystem = true)
-    {
-        if ($this->isEmptyString($id)) {
+    public function setProps($id, $props, $isSystem = self::IS_SYSTEM ){
+        if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
 
@@ -910,13 +896,12 @@ class Api
      * @param array $props
      * @param bool $isSystem - is system user
      *
-     * @throws HttpException
      * @throws InvalidArgumentException
      * @throws Exception
      */
-    public function deleteProps($id, $props, $isSystem = true)
+    public function deleteProps($id, $props, $isSystem = self::IS_SYSTEM)
     {
-        if ($this->isEmptyString($id)) {
+        if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
 
@@ -951,11 +936,10 @@ class Api
      *
      * @throws InvalidArgumentException
      * @throws Exception
-     * @throws HttpException
      */
     public function setPresence($id, $presence, $sessionId)
     {
-        if ($this->isEmptyString($id)) {
+        if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
 
@@ -986,7 +970,6 @@ class Api
      *
      * @throws InvalidArgumentException
      * @throws Exception
-     * @throws HttpException
      */
     public function sendUserMessage($id, $message, $type = 'popup_chat')
     {
@@ -1025,11 +1008,10 @@ class Api
      *
      * @throws InvalidArgumentException
      * @throws Exception
-     * @throws HttpException
      */
     public function startConversation($id, $message)
     {
-        if ($this->isEmptyString($id)) {
+        if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
 
@@ -1057,17 +1039,13 @@ class Api
      * @param $eventName
      * @param array $additionalParams
      *
-     * @param bool $isSystem
      * @return bool
      *
-     * @throws Exception
-     * @throws HttpException
      * @throws InvalidArgumentException
-     * @throws InvalidJsonException
      */
-    public function trackEvent($id, $eventName, $additionalParams = [], $isSystem = true)
+    public function trackEvent($id, $eventName, $additionalParams = [], $isSystem = self::IS_SYSTEM)
     {
-        if ($this->isEmptyString($id)) {
+        if ($this->isEmptyId($id)) {
             throw new InvalidArgumentException;
         }
 
@@ -1104,15 +1082,10 @@ class Api
      *
      * @throws InvalidArgumentException
      * @throws Exception
-     * @throws HttpException
      */
 
     public function getEvents($id, $eventName = null, $limit = 20, $offset = 0)
     {
-        if ($this->isEmptyString($id)) {
-            throw new InvalidArgumentException;
-        }
-
         $params = [
             'count' => $limit,
             'after' => $offset
